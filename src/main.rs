@@ -3,13 +3,16 @@
 // This example demonstrates clap's "usage strings" method of creating arguments
 // which is less verbose
 extern crate clap;
+extern crate kenny;
 use clap::App;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::process;
+use std::{env, process};
 
+use kenny::handler;
 use serde::Deserialize;
+use slack::RtmClient;
 
 // By default, struct field names are deserialized based on the position of
 // a corresponding field in the CSV data's header record.
@@ -68,5 +71,24 @@ fn main() {
         }
     };
     println!("Read {} questions", questions.len());
-    
+
+    let api_key: String = api_key();
+
+    let mut handler = handler::Handler;
+    let r = RtmClient::login_and_run(&api_key, &mut handler);
+
+    match r {
+        Ok(_) => {}
+        Err(err) => panic!("Error: {}", err),
+    }
+}
+
+fn api_key() -> String {
+    match env::var("SLACK_API_TOKEN") {
+        Ok(val) => val,
+        Err(_) => {
+            println!("Required the SLACK_API_TOKEN environment variable");
+            process::exit(1);
+        }
+    }
 }
