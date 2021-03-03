@@ -5,7 +5,8 @@
 extern crate clap;
 use clap::App;
 use std::error::Error;
-use std::io;
+use std::fs::File;
+use std::io::Read;
 use std::process;
 
 use serde::Deserialize;
@@ -19,15 +20,20 @@ struct Question {
     answer: String,
 }
 
-fn read_questions() -> Result<(), Box<dyn Error>> {
-    let mut rdr = csv::Reader::from_reader(io::stdin());
+// Read all questions to a vec!
+fn read_questions<R>(src: R) -> Result<Vec<Question>, Box<dyn Error>>
+where
+    R: Read,
+{
+    let mut questions: Vec<Question> = vec![];
+    let mut rdr = csv::Reader::from_reader(src);
     for result in rdr.deserialize() {
         // Notice that we need to provide a type hint for automatic
         // deserialization.
         let question: Question = result?;
-        println!("{:?}", question);
+        questions.push(question);
     }
-    Ok(())
+    Ok(questions)
 }
 
 fn main() {
@@ -42,13 +48,25 @@ fn main() {
         )
         .get_matches();
 
-    let _questions = matches.value_of("file").unwrap_or("questions.csv");
-    println!("Value for questions: {}", _questions);
+    let questions_path = matches.value_of("file").unwrap_or("questions.csv");
+    println!("Value for questions: {}", questions_path);
     let _slack_key = matches.value_of("key").unwrap_or("slack-key");
     println!("key: {}", _slack_key);
 
-    if let Err(err) = read_questions() {
-        println!("error reading questions: {}", err);
-        process::exit(1);
-    }
+    let f = File::open(questions_path);
+    let f = match f {
+        Ok(file) => file,
+        Err(error) => panic!("Problem opening the file: {:?}", error),
+    };
+
+    let questions = read_questions(f);
+    let questions = match questions {
+        Ok(questions) => questions,
+        Err(e) => {
+            println!("error reading questions: {}", e);
+            process::exit(1);
+        }
+    };
+    println!("Read {} questions", questions.len());
+    
 }
