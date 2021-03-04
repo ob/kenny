@@ -4,40 +4,17 @@
 // which is less verbose
 extern crate clap;
 extern crate kenny;
+extern crate text_io;
+
 use clap::App;
-use std::error::Error;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Write};
 use std::{env, process};
+use text_io::read;
 
 use kenny::handler;
-use serde::Deserialize;
+use kenny::trivia;
 use slack::RtmClient;
-
-// By default, struct field names are deserialized based on the position of
-// a corresponding field in the CSV data's header record.
-#[derive(Debug, Deserialize)]
-struct Question {
-    category: String,
-    question: String,
-    answer: String,
-}
-
-// Read all questions to a vec!
-fn read_questions<R>(src: R) -> Result<Vec<Question>, Box<dyn Error>>
-where
-    R: Read,
-{
-    let mut questions: Vec<Question> = vec![];
-    let mut rdr = csv::Reader::from_reader(src);
-    for result in rdr.deserialize() {
-        // Notice that we need to provide a type hint for automatic
-        // deserialization.
-        let question: Question = result?;
-        questions.push(question);
-    }
-    Ok(questions)
-}
 
 fn main() {
     let matches = App::new("kenny")
@@ -45,16 +22,19 @@ fn main() {
         .author("ob <ob@bonillas.net>")
         .about("Trivia Slack Bot")
         .args_from_usage(
-            "-f, --file=[FILE] 'Questions file in CSV format'
-            -k, --key=[FILE] 'Slack key'
-            -v...                'Sets the level of verbosity'",
+            "
+            --questions-file=[FILE] 'Questions file in CSV format'
+            --slack-key-file=[FILE] 'Slack key'
+            --test 'Test the bot'
+            ",
         )
         .get_matches();
 
-    let questions_path = matches.value_of("file").unwrap_or("questions.csv");
-    println!("Value for questions: {}", questions_path);
-    let _slack_key = matches.value_of("key").unwrap_or("slack-key");
-    println!("key: {}", _slack_key);
+    let questions_path = matches
+        .value_of("quiestions-file")
+        .unwrap_or("questions.csv");
+    let slack_key_file = matches.value_of("slack-key-file");
+    let testing = matches.is_present("test");
 
     let f = File::open(questions_path);
     let f = match f {
@@ -62,7 +42,7 @@ fn main() {
         Err(error) => panic!("Problem opening the file: {:?}", error),
     };
 
-    let questions = read_questions(f);
+    let questions = trivia::read_questions(f);
     let questions = match questions {
         Ok(questions) => questions,
         Err(e) => {
@@ -72,7 +52,21 @@ fn main() {
     };
     println!("Read {} questions", questions.len());
 
-    let api_key: String = api_key();
+    if testing {
+        println!("Testing bot");
+        loop {
+            print!("> ");
+            io::stdout().flush().unwrap();
+            let line: String = read!("{}\n");
+            if line == "exit" {
+                break;
+            }
+            println!("You typed: {}", line);
+        }
+        process::exit(0);
+    }
+
+    let api_key: String = api_key(slack_key_file);
 
     let mut handler = handler::Handler;
     let r = RtmClient::login_and_run(&api_key, &mut handler);
@@ -83,7 +77,14 @@ fn main() {
     }
 }
 
-fn api_key() -> String {
+fn api_key(key_file: Option<&str>) -> String {
+    match key_file {
+        Some(file) => {
+            println!("Reading key from file: {}", file);
+            return String::from("FOO");
+        }
+        _ => {}
+    }
     match env::var("SLACK_API_TOKEN") {
         Ok(val) => val,
         Err(_) => {
