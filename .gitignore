@@ -1,2 +1,6 @@
-slack-key.txt
+__pycache__/
+.DS_Store
 .env
+.venv/
+logs/
+kenny.db
