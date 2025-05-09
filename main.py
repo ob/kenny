@@ -30,6 +30,7 @@ from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from bot.db import init_db
 from bot.game_manager import GameManager
+from bot.openai_client import is_trivia_request
 
 # Initialize Slack Bolt app
 app = AsyncApp(token=SLACK_BOT_TOKEN)
@@ -37,13 +38,14 @@ app = AsyncApp(token=SLACK_BOT_TOKEN)
 # Create GameManager instance
 game_manager = GameManager(app, question_file="questions.csv")
 
-# Handle app mentions for witty responses and trivia start
+# Handle app mentions for witty responses and potential trivia starts
 @app.event("app_mention")
 async def handle_mention(event, say):
     user = event.get('user')
     text = event.get('text', '')
     logger.info(f"Mention from {user}: {text}")
-    if 'play trivia' in text.lower():
+    # Determine intent via OpenAI
+    if await is_trivia_request(text):
         channel = event.get('channel')
         await say(f":game_die: Starting a trivia game! 🎲")
         await game_manager.start_game(channel, total_rounds=5)

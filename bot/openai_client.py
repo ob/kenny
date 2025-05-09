@@ -1,11 +1,40 @@
 import os
 import json
 import logging
-import openai
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
 
-# Initialize OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+load_dotenv()
+
+# Initialize OpenAI client
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 logger = logging.getLogger(__name__)
+
+async def is_trivia_request(text: str) -> bool:
+    """
+    Use OpenAI to classify whether the user's text indicates a desire to start a trivia game.
+    """
+    prompt = (
+        f"You are a classifier that determines if a user wants to play trivia. "
+        f"User message: '{text}'. "
+        "Respond with 'yes' if they want to start a trivia game, otherwise 'no'."
+    )
+    try:
+        # Use the v1 async API
+        resp = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Classify if user intent is to play trivia."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0,
+            max_tokens=3,
+        )
+        answer = resp.choices[0].message.content.strip().lower()
+        return answer.startswith("yes")
+    except Exception as e:
+        logger.exception("Error classifying trivia intent: %s", e)
+        return False
 
 async def get_curveball_question() -> dict:
     """
@@ -18,21 +47,17 @@ async def get_curveball_question() -> dict:
         "Do not include any additional text."
     )
     try:
-        resp = await openai.chat.completions.acreate(
+        resp = await client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_prompt}
-            ],
+            messages=[{"role": "system", "content": system_prompt}],
             temperature=0.8,
             max_tokens=150,
         )
         content = resp.choices[0].message.content.strip()
         data = json.loads(content)
-        question = data.get("question", "")
-        answer = data.get("answer", "")
-        return {"question": question, "answer": answer}
+        return {"question": data.get("question", ""), "answer": data.get("answer", "")}
     except json.JSONDecodeError:
-        logger.exception("Failed to decode JSON from OpenAI curveball response: %s", content)
+        logger.exception("Failed to decode JSON from curveball: %s", content)
         return {"question": "(curveball) What is the capital of France?", "answer": "Paris"}
     except Exception as e:
         logger.exception("Error fetching curveball question: %s", e)
@@ -49,7 +74,7 @@ async def get_witty_response(user: str, question_text: str) -> str:
         "Keep it short and fun."
     )
     try:
-        resp = await openai.chat.completions.acreate(
+        resp = await client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a witty, enthusiastic host."},
