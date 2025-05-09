@@ -30,7 +30,7 @@ from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from bot.db import init_db
 from bot.game_manager import GameManager
-from bot.openai_client import is_trivia_request
+from bot.openai_client import is_trivia_request, get_witty_chat_response
 
 # Initialize Slack Bolt app
 app = AsyncApp(token=SLACK_BOT_TOKEN)
@@ -50,7 +50,8 @@ async def handle_mention(event, say):
         await say(f":game_die: Starting a trivia game! 🎲")
         await game_manager.start_game(channel, total_rounds=5)
     else:
-        await say(f"Hey <@{user}>! You said: {text}")
+        witty = await get_witty_chat_response(user, text)
+        await say(witty)
 
 # Slash command to start trivia
 @app.command("/trivia")

@@ -87,3 +87,28 @@ async def get_witty_response(user: str, question_text: str) -> str:
     except Exception as e:
         logger.exception("Error fetching witty response: %s", e)
         return f":tada: Nice job, <@{user}>!"
+
+async def get_witty_chat_response(user: str, message_text: str) -> str:
+    """
+    Ask OpenAI for a witty, fun response to a general chat message.
+    Returns a string.
+    """
+    prompt = (
+        f"Reply to <@{user}>'s message in a witty, fun, and friendly way.\n"
+        f"User message: '{message_text}'\n"
+        "Keep it short, clever, and conversational."
+    )
+    try:
+        resp = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a witty, friendly chatbot who loves to banter with users."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.95,
+            max_tokens=60,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        logger.exception("Error fetching witty chat response: %s", e)
+        return f"Hey <@{user}>! (witty response unavailable)"
